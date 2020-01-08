@@ -15,6 +15,9 @@ import scala.collection.JavaConversions._
 import spray.json._
 import spray.json.DefaultJsonProtocol._
 
+import edu.cmu.cs.ls.keymaerax.tools.Mathematica
+import edu.cmu.cs.ls.keymaerax.tools._
+
 /**
   * Prelauncher that restarts a big stack JVM and then starts [[edu.cmu.cs.ls.keymaerax.launcher.KeYmaeraX]].
   * Usage:
@@ -36,55 +39,67 @@ object Main {
   private var logFile = false
 
   def main(args : Array[String]) : Unit = {
-    val isFirstLaunch = if (args.length >= 1) {
-      !args.head.equals("-launch") || args.length>=2 && args(0)=="-ui" && args(1)=="-launch"
-    } else true
 
-    if (isFirstLaunch) {
-      IS_RELAUNCH_PROCESS = true
-      val java: String = javaLocation
-      val keymaeraxjar: String = jarLocation
 
-      val javaVersion = System.getProperty("java.version")
-      val javaMajorMinor :: updateVersion :: Nil =
-        if (javaVersion.contains("_")) javaVersion.split("_").toList
-        else javaVersion :: "-1" :: Nil
-      val _ :: javaMajor :: javaMinor :: Nil =
-        if (javaMajorMinor.startsWith("1.")) javaMajorMinor.split("\\.").toList
-        else "1" +: javaMajorMinor.split("\\.").toList.dropRight(1) //@note Java 10 onwards (drop update version)
+    println("CAVALLO IN HERE")
 
-      if (Integer.parseInt(javaMajor) < 8 || (Integer.parseInt(javaMajor) == 8 && Integer.parseInt(javaMinor) == 0 && Integer.parseInt(updateVersion) < 111)) {
-        println(s"KeYmaera X requires at least Java version 1.8.0_111, but was started with $javaVersion. Please update Java and restart KeYmaera X.")
-      } else {
-        val cmd =
-          if (Integer.parseInt(javaMajor) <= 8) {
-            (java :: "-Xss20M" :: "-jar" :: keymaeraxjar :: "-launch" :: Nil) ++ args ++
-              (if (args.isEmpty) "-ui" :: Nil else Nil)
-          } else {
-            (java :: "-Xss20M" :: "--add-modules" :: "java.xml.bind" :: "-jar" :: keymaeraxjar :: "-launch" :: Nil) ++ args ++
-              (if (args.intersect(KeYmaeraX.Modes.modes.toList).isEmpty) "-ui" :: Nil else Nil)
-          }
-        launcherLog("Restarting KeYmaera X with sufficient stack space\n" + cmd.mkString(" "))
-        runCmd(cmd)
-      }
-    } else if (args.contains("-ui")) {
-      if (!(System.getenv().containsKey("HyDRA_SSL") && System.getenv("HyDRA_SSL").equals("on"))) {
-        // Initialize the loading dialog splash screen.
-        LoadingDialogFactory()
-      }
+    val config = DefaultConfiguration.currentMathematicaConfig
+    val m = new MathematicaToSMT(new JLinkMathematicaLink("Mathematica"), "cavallo"); m.init(config)
+    m.toSMT()
+    sys.exit(0)
 
-      exitIfDeprecated()
+    // val isFirstLaunch = if (args.length >= 1) {
+    //   !args.head.equals("-launch") || args.length>=2 && args(0)=="-ui" && args(1)=="-launch"
+    // } else true
 
-      LoadingDialogFactory().addToStatus(15, Some("Checking lemma caches..."))
-      clearCacheIfDeprecated()
+    // if (isFirstLaunch) {
+    //   IS_RELAUNCH_PROCESS = true
+    //   val java: String = javaLocation
+    //   val keymaeraxjar: String = jarLocation
 
-      assert(args.head.equals("-launch"))
-      startServer(args.tail)
-      //@todo use command line argument -mathkernel and -jlink from KeYmaeraX.main
-      //@todo use command line arguments as the file to load. And preferably a second argument as the tactic file to run.
-    } else {
-      KeYmaeraX.main(args)
-    }
+    //   val javaVersion = System.getProperty("java.version")
+    //   val javaMajorMinor :: updateVersion :: Nil =
+    //     if (javaVersion.contains("_")) javaVersion.split("_").toList
+    //     else javaVersion :: "-1" :: Nil
+    //   val _ :: javaMajor :: javaMinor :: Nil =
+    //     if (javaMajorMinor.startsWith("1.")) javaMajorMinor.split("\\.").toList
+    //     else "1" +: javaMajorMinor.split("\\.").toList.dropRight(1) //@note Java 10 onwards (drop update version)
+
+    //   if (Integer.parseInt(javaMajor) < 8 || (Integer.parseInt(javaMajor) == 8 && Integer.parseInt(javaMinor) == 0 && Integer.parseInt(updateVersion) < 111)) {
+    //     println(s"KeYmaera X requires at least Java version 1.8.0_111, but was started with $javaVersion. Please update Java and restart KeYmaera X.")
+    //   } else {
+    //     val cmd =
+    //       if (Integer.parseInt(javaMajor) <= 8) {
+    //         (java :: "-Xss20M" :: "-jar" :: keymaeraxjar :: "-launch" :: Nil) ++ args ++
+    //           (if (args.isEmpty) "-ui" :: Nil else Nil)
+    //       } else {
+    //         (java :: "-Xss20M" :: "--add-modules" :: "java.xml.bind" :: "-jar" :: keymaeraxjar :: "-launch" :: Nil) ++ args ++
+    //           (if (args.intersect(KeYmaeraX.Modes.modes.toList).isEmpty) "-ui" :: Nil else Nil)
+    //       }
+    //     launcherLog("Restarting KeYmaera X with sufficient stack space\n" + cmd.mkString(" "))
+    //     runCmd(cmd)
+    //   }
+    // } else if (args.contains("-ui")) {
+    //   if (!(System.getenv().containsKey("HyDRA_SSL") && System.getenv("HyDRA_SSL").equals("on"))) {
+    //     // Initialize the loading dialog splash screen.
+    //     LoadingDialogFactory()
+    //   }
+
+    //   exitIfDeprecated()
+
+    //   LoadingDialogFactory().addToStatus(15, Some("Checking lemma caches..."))
+    //   clearCacheIfDeprecated()
+
+    //   assert(args.head.equals("-launch"))
+    //   startServer(args.tail)
+    //   //@todo use command line argument -mathkernel and -jlink from KeYmaeraX.main
+    //   //@todo use command line arguments as the file to load. And preferably a second argument as the tactic file to run.
+    // } else {
+
+
+
+    //   KeYmaeraX.main(args)
+    // }
   }
 
   def startServer(args: Array[String]) : Unit = {

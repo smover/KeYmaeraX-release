@@ -56,7 +56,7 @@ abstract class SMTConverter extends (Formula=>String) with Logging {
   }
 
   /** Convert KeYmaera X expression to SMT form which contains: variable/function declaration and converted SMT formula */
-  private def generateSMT(expr: Expression): (String, String) = {
+  protected def generateSMTInner(expr: Expression): (List[String], String) = {
     val allSymbols = StaticSemantics.symbols(expr).toList.sorted
     val names = allSymbols.map(s => nameIdentifier(s))
     require(names.distinct.size == names.size, "Expect unique name_index identifiers")
@@ -75,10 +75,18 @@ abstract class SMTConverter extends (Formula=>String) with Logging {
             case _ => "(declare-fun " + PREFIX + nameIdentifier(f) + " (" + generateFuncPrmtSorts(f.domain) +  ") " + f.sort + ")"
           }
       }
-    ).mkString("\n")
+    )
     val smtFormula = convertToSMT(expr)
-    //@todo check whether newlines are nonsignificant so can be added unconditionally
-    if(varDec.nonEmpty) varDec += "\n"
+    (varDec, smtFormula)
+  }
+
+
+  /** Convert KeYmaera X expression to SMT form which contains: variable/function declaration and converted SMT formula */
+  private def generateSMT(expr: Expression): (String, String) = {
+    val res = generateSMTInner(expr)
+    var varDec = res._1.mkString
+    val smtFormula = res._2
+    if (varDec.nonEmpty) varDec += "\n"
     (varDec, smtFormula)
   }
 
