@@ -200,56 +200,56 @@ class ScriptedRequestTests extends TacticTestBase {
     }
   }}
 
-  "Step details" should "work on a simple example" in withDatabase { db => withMathematica { _ =>
-    val modelContents = "ProgramVariables Real x; End. Problem x>=0 -> [x:=x+1;]x>=0 End."
-    val proofId = db.createProof(modelContents)
-    val t = SessionManager.token(SessionManager.add(db.user))
-    SessionManager.session(t) += proofId.toString -> ProofSession(proofId.toString, FixedGenerator(Nil), Declaration(Map()))
-    val tacticRunner = runTactic(db, t, proofId) _
+  // "Step details" should "work on a simple example" in withDatabase { db => withMathematica { _ =>
+  //   val modelContents = "ProgramVariables Real x; End. Problem x>=0 -> [x:=x+1;]x>=0 End."
+  //   val proofId = db.createProof(modelContents)
+  //   val t = SessionManager.token(SessionManager.add(db.user))
+  //   SessionManager.session(t) += proofId.toString -> ProofSession(proofId.toString, FixedGenerator(Nil), Declaration(Map()))
+  //   val tacticRunner = runTactic(db, t, proofId) _
 
-    tacticRunner("()", implyR(1))
-    inside(new ProofTaskExpandRequest(db.db, db.user.userName, proofId.toString, "(1,0)", false).getResultingResponses(t).loneElement) {
-      case ExpandTacticResponse(_, parentTactic, stepsTactic, _, _, _, _) =>
-        parentTactic shouldBe "implyR"
-        stepsTactic shouldBe ""
-      case e: ErrorResponse if e.exn != null => fail(e.msg, e.exn)
-      case e: ErrorResponse if e.exn == null => fail(e.msg)
-    }
-  }}
+  //   tacticRunner("()", implyR(1))
+  //   inside(new ProofTaskExpandRequest(db.db, db.user.userName, proofId.toString, "(1,0)", false).getResultingResponses(t).loneElement) {
+  //     case ExpandTacticResponse(_, parentTactic, stepsTactic, _, _, _, _) =>
+  //       parentTactic shouldBe "implyR"
+  //       stepsTactic shouldBe ""
+  //     case e: ErrorResponse if e.exn != null => fail(e.msg, e.exn)
+  //     case e: ErrorResponse if e.exn == null => fail(e.msg)
+  //   }
+  // }}
 
-  it should "expand prop" in withDatabase { db => withMathematica { _ =>
-    val modelContents = "ProgramVariables Real x, y; End. Problem x>=0&y>0 -> [x:=x+y;]x>=0 End."
-    val proofId = db.createProof(modelContents)
-    val t = SessionManager.token(SessionManager.add(db.user))
-    SessionManager.session(t) += proofId.toString -> ProofSession(proofId.toString, FixedGenerator(Nil), Declaration(Map()))
-    val tacticRunner = runTactic(db, t, proofId) _
+  // it should "expand prop" in withDatabase { db => withMathematica { _ =>
+  //   val modelContents = "ProgramVariables Real x, y; End. Problem x>=0&y>0 -> [x:=x+y;]x>=0 End."
+  //   val proofId = db.createProof(modelContents)
+  //   val t = SessionManager.token(SessionManager.add(db.user))
+  //   SessionManager.session(t) += proofId.toString -> ProofSession(proofId.toString, FixedGenerator(Nil), Declaration(Map()))
+  //   val tacticRunner = runTactic(db, t, proofId) _
 
-    tacticRunner("()", prop)
-    inside(new ProofTaskExpandRequest(db.db, db.user.userName, proofId.toString, "(1,0)", false).getResultingResponses(t).loneElement) {
-      case ExpandTacticResponse(_, parentTactic, stepsTactic, _, _, _, _) =>
-        parentTactic shouldBe "prop"
-        stepsTactic shouldBe "implyR(1) ; andL(-1)"
-      case e: ErrorResponse if e.exn != null => fail(e.msg, e.exn)
-      case e: ErrorResponse if e.exn == null => fail(e.msg)
-    }
-  }}
+  //   tacticRunner("()", prop)
+  //   inside(new ProofTaskExpandRequest(db.db, db.user.userName, proofId.toString, "(1,0)", false).getResultingResponses(t).loneElement) {
+  //     case ExpandTacticResponse(_, parentTactic, stepsTactic, _, _, _, _) =>
+  //       parentTactic shouldBe "prop"
+  //       stepsTactic shouldBe "implyR(1) ; andL(-1)"
+  //     case e: ErrorResponse if e.exn != null => fail(e.msg, e.exn)
+  //     case e: ErrorResponse if e.exn == null => fail(e.msg)
+  //   }
+  // }}
 
-  it should "expand master" in withMathematica { _ => withDatabase { db =>
-    val modelContents = "ProgramVariables Real x, y; End. Problem x>=0&y>0 -> [x:=x+y;]x>=0 End."
-    val proofId = db.createProof(modelContents)
-    val t = SessionManager.token(SessionManager.add(db.user))
-    SessionManager.session(t) += proofId.toString -> ProofSession(proofId.toString, FixedGenerator(Nil), Declaration(Map()))
-    val tacticRunner = runTactic(db, t, proofId) _
+  // it should "expand master" in withMathematica { _ => withDatabase { db =>
+  //   val modelContents = "ProgramVariables Real x, y; End. Problem x>=0&y>0 -> [x:=x+y;]x>=0 End."
+  //   val proofId = db.createProof(modelContents)
+  //   val t = SessionManager.token(SessionManager.add(db.user))
+  //   SessionManager.session(t) += proofId.toString -> ProofSession(proofId.toString, FixedGenerator(Nil), Declaration(Map()))
+  //   val tacticRunner = runTactic(db, t, proofId) _
 
-    tacticRunner("()", master())
-    inside(new ProofTaskExpandRequest(db.db, db.user.userName, proofId.toString, "(1,0)", false).getResultingResponses(t).loneElement) {
-      case ExpandTacticResponse(_, parentTactic, stepsTactic, _, _, _, _) =>
-        parentTactic shouldBe "master"
-        stepsTactic shouldBe "implyR('R) ; andL('L) ; step(1) ; QE"
-      case e: ErrorResponse if e.exn != null => fail(e.msg, e.exn)
-      case e: ErrorResponse if e.exn == null => fail(e.msg)
-    }
-  }}
+  //   tacticRunner("()", master())
+  //   inside(new ProofTaskExpandRequest(db.db, db.user.userName, proofId.toString, "(1,0)", false).getResultingResponses(t).loneElement) {
+  //     case ExpandTacticResponse(_, parentTactic, stepsTactic, _, _, _, _) =>
+  //       parentTactic shouldBe "master"
+  //       stepsTactic shouldBe "implyR('R) ; andL('L) ; step(1) ; QE"
+  //     case e: ErrorResponse if e.exn != null => fail(e.msg, e.exn)
+  //     case e: ErrorResponse if e.exn == null => fail(e.msg)
+  //   }
+  // }}
 
   "Applicable axioms" should "not choke on wrong positions" in withDatabase { db =>
     val modelContents = "ProgramVariables Real x; End. Problem x>=0 -> [x:=x+1;]x>=0 End."
