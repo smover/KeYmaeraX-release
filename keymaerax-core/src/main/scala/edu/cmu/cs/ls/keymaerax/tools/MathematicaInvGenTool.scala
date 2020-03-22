@@ -89,6 +89,9 @@ class MathematicaInvGenTool(override val link: MathematicaLink)
                   |Needs["LZZ`",FileNameJoin[{"Primitives","LZZ.m"}]];
                   |LZZ`InvS[$problem]""".stripMargin.trim()
 
+    println("Running command!")
+    println(command)
+
     val (output, result) = runUnchecked(command)
     logger.debug("LZZ check: "+ result.prettyString + " from raw output " + output)
     result match {

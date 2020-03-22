@@ -14,6 +14,9 @@ import edu.cmu.cs.ls.keymaerax.tools.MathematicaConversion.{KExpr, MExpr}
 
 import edu.cmu.cs.ls.keymaerax.btactics.helpers.DifferentialHelper
 
+import edu.cmu.cs.ls.keymaerax.btactics.Generator.Generator
+import edu.cmu.cs.ls.keymaerax.btactics.Augmentors._
+
 import spray.json._
 import DefaultJsonProtocol._
 
@@ -123,43 +126,115 @@ case class LzzProblem(name : String,
   candidate : String
 )
 
-object MathematicaToSMT {
-  def lzzToSMT(name : String, ode : ODESystem, invar : Formula) : String = {
-    val converter = DefaultMySMTConverter
+case class InvarProblem(name : String,
+  contVars : List[String],
+  varsDecl : Set[String],
+  vectorField : List[String],
+  constraints : String,
+  antecedent : String,
+  consequent : String,
+  predicates : List[String],
+)
 
+case class ODERepr(contVars : List[String],
+  varsDecl : Set[String],
+  vectorField : List[String],
+  constraints : String)
+
+object MathematicaToSMT {
+
+  def getSMTForODE(converter : MyConverter, ode : ODESystem) : ODERepr = {
     // Hack representing vars and terms as equalities
-    val appVars = DifferentialHelper.getPrimedVariables(ode).map(v =>
+    var contVarsSymb = DifferentialHelper.getPrimedVariables(ode)
+    val appVars = contVarsSymb.map(v =>
       DefaultMySMTConverter.getSmt(Equal(v, "0".asTerm)))
     val varsTmp = appVars.map(v => v._1)
     val contVars = varsTmp.foldLeft (List[String]()) ((vList, varList) => {
       varList.foldLeft (vList) ( (vList, varDecl) => {varDecl :: vList})
     })
 
-    val vfAll  = DifferentialHelper.atomicOdes(ode).map(o =>
-      DefaultMySMTConverter.getSmt(Equal(o.e, "0".asTerm)))
+    val atomicOdes : List[AtomicODE] = DifferentialHelper.atomicOdes(ode)
+    val var2ode : Map[Variable,Term] =
+      atomicOdes.foldLeft(Map[Variable,Term]()) ( (map, atomicOde) =>
+        map + (atomicOde.xp.x -> atomicOde.e))
+
+    // Extracts the odes with the same order of contVars
+    val vfAll = contVarsSymb.foldLeft (List[(List[String], String)]()) ( (acc, contVar) => {
+      val term : Term = var2ode(contVar)
+      DefaultMySMTConverter.getSmt(Equal(term, "0".asTerm)) :: acc
+    })
+
+    // val vfAll  = DifferentialHelper.atomicOdes(ode).map(o =>
+    //   DefaultMySMTConverter.getSmt(Equal(o.e, "0".asTerm)))
     val vfVars = vfAll.map(l => l._1)
     val vfSMT = vfAll.map(l => l._2)
     val vfSet = vfVars.foldLeft (Set[String]()) ((vset, varList) => {
       varList.foldLeft (vset) ( (vset, varDecl) => {vset + varDecl})
     })
+    val (constraintsVars, constraintsSMT) = DefaultMySMTConverter.getSmt(ode.constraint)
 
+    ODERepr(contVars, vfSet ++ constraintsVars, vfSMT, constraintsSMT)
+  }
+
+  def lzzToSMT(name : String, ode : ODESystem, invar : Formula) : String = {
+    val converter = DefaultMySMTConverter
+
+    val odeRepr = MathematicaToSMT.getSMTForODE(converter, ode)
     val (invarVars, invarSMT) = DefaultMySMTConverter.getSmt(invar)
-
-    val (constraintsVars, constraintsSMT) = DefaultMySMTConverter.getSmt(invar)
-
-    val allVars = vfSet ++ invarVars ++ constraintsVars
 
     implicit val lzzProblemFormat: JsonFormat[LzzProblem] = jsonFormat6(LzzProblem)
     val problemJson = LzzProblem(name,
-      contVars,
-      allVars,
-      vfSMT,
-      constraintsSMT,
+      odeRepr.contVars,
+      odeRepr.varsDecl ++ invarVars,
+      odeRepr.vectorField,
+      odeRepr.constraints,
       invarSMT
     )
 
-
     val jsonAst = problemJson.toJson
+    return jsonAst.prettyPrint
+  }
+
+  /**
+    * Converts an invariant generation problem to "SMT"
+    * 
+    * The output file is a json file containing SMT formulas.
+    */
+  def invarToSMT(name : String, seq : Sequent) : String = {
+    val converter = DefaultMySMTConverter
+
+    def getSingleInvProblem(): Generator[InvarProblem] = (sequent,pos) => sequent.sub(pos) match {
+      // The semantics of sequent `ante |- succ` is the conjunction of the
+      // formulas in `ante` implying the disjunction of the formulas in `succ`.
+
+      case Some(Box(ode: ODESystem, post: Formula)) if post.isFOL => {
+        val odeRepr = MathematicaToSMT.getSMTForODE(converter, ode)
+        val (antVars, antSMT) : (List[String], String) = DefaultMySMTConverter.getSmt(
+          sequent.ante.reduce(And)
+        )
+        val (subVars, subSMT) : (List[String], String) = DefaultMySMTConverter.getSmt(post)
+
+        val invarProblem = InvarProblem(name,
+          odeRepr.contVars,
+          odeRepr.varsDecl ++ antVars ++ subVars,
+          odeRepr.vectorField,
+          odeRepr.constraints,
+          antSMT,
+          subSMT,
+          List()
+        )
+        List(invarProblem).toStream
+      }
+      case _ => {
+        throw new IllegalArgumentException("")
+      }
+    }
+
+    lazy val problemsCandidate: Generator[InvarProblem] = getSingleInvProblem()
+    val problems = problemsCandidate(seq, SuccPos(0)).toList
+
+    implicit val invarProblemFormat: JsonFormat[InvarProblem] = jsonFormat8(InvarProblem)
+    val jsonAst = problems.toJson
     return jsonAst.prettyPrint
   }
 }

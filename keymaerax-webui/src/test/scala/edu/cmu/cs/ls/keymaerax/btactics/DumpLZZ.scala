@@ -30,7 +30,7 @@ class DumpLZZ extends TacticTestBase {
   val randomComplexity = 6
   val rand = new RandomFormula()
 
-  it should "fast-check invariants with LZZ" taggedAs SlowTest in withMathematica { tool =>
+  it should "print LZZ benchmarks as output" taggedAs SlowTest in withMathematica { tool =>
     withTemporaryConfig(Map(Configuration.Keys.PEGASUS_INVCHECK_TIMEOUT -> "-1")) {
       val entries = KeYmaeraXArchiveParser.parse(io.Source.fromInputStream(
         getClass.getResourceAsStream("/keymaerax-projects/benchmarks/nonlinear.kyx")).mkString)
@@ -66,6 +66,42 @@ class DumpLZZ extends TacticTestBase {
             case None => // no invariant to fast-check
           }
 
+      }
+    }
+  }
+
+  it should "print invariant generation problem as output" taggedAs SlowTest in withMathematica { tool =>
+    withTemporaryConfig(Map(Configuration.Keys.PEGASUS_INVCHECK_TIMEOUT -> "-1")) {
+      val entries = KeYmaeraXArchiveParser.parse(io.Source.fromInputStream(
+        getClass.getResourceAsStream("/keymaerax-projects/benchmarks/nonlinear.kyx")).mkString)
+      val annotatedInvariants: ConfigurableGenerator[Formula] = TactixLibrary.invGenerator match {
+        case gen: ConfigurableGenerator[Formula] => gen
+      }
+
+      forEvery(Table(("Name", "Model"),
+        entries.map(e => e.name -> e.model): _*).
+        filter({ case (_, Imply(_, Box(_: ODESystem, _))) => true case _ => false })) {
+        (name, model) =>
+        // val (model, _) = parseStripHints(modelContent)
+        model match {
+          case Imply(ante, succ@Box(_: ODESystem, _)) =>
+            {
+              val seq = Sequent(IndexedSeq(ante), IndexedSeq(succ))
+              println(s"Generating invariants $name")
+
+              val jsonRepr = MathematicaToSMT.invarToSMT(name, seq)
+              val fileName = name.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
+              val filePath = "/tmp/" + fileName + ".invar"
+
+              new PrintWriter(filePath) {
+                write(jsonRepr);
+                close
+              }
+
+              println(s"Dumped $name into $filePath")
+            }
+          case _ => ()
+        }
       }
     }
   }

@@ -97,12 +97,26 @@ class ContinuousInvariantTests extends TacticTestBase {
         entries.map(e => e.name -> e.model): _*).
         filter({ case (_, Imply(_, Box(_: ODESystem, _))) => true case _ => false })) {
         (name, model) =>
-          println("\n" + name)
+          if (name.compareTo("Strogatz Exercise 7_3_5") == 0) {
+
+
+
           val Imply(_, Box(ode@ODESystem(_, _), _)) = model
           annotatedInvariants.products.get(ode) match {
-            case Some(invs) => tool.lzzCheck(ode, invs.reduce(And)) shouldBe true
-            case None => // no invariant to fast-check
+            case Some(invs) => {
+              val myRes = invs.foldLeft("true".asFormula) { (acc : Formula, i : Object) => 
+                i match {
+                  case (a : Formula, _) => And(acc, a)
+                  case _ => acc
+                }
+              }
+              val res = tool.lzzCheck(ode, myRes)
+              println("name is " + res)
+              res shouldBe true
+            }
+            case None => ()// no invariant to fast-check
           }
+          } else {()}
           println(name + " done")
       }
     }
