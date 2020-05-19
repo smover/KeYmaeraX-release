@@ -17,6 +17,8 @@ import edu.cmu.cs.ls.keymaerax.btactics.helpers.DifferentialHelper
 import edu.cmu.cs.ls.keymaerax.btactics.Generator.Generator
 import edu.cmu.cs.ls.keymaerax.btactics.Augmentors._
 
+
+
 import spray.json._
 import DefaultJsonProtocol._
 
@@ -65,37 +67,139 @@ class MathematicaToSMT(private[tools] val link: MathematicaLink,
     }
   }
 
-  def toSMT() : Unit = {
-    val converter = DefaultSMTConverter
-    val ml = new BaseKeYmaeraMathematicaBridge[KExpr](link, KeYmaeraToMathematica, MathematicaToKeYmaera) {}
-    val command = s"""
-strings = Import["/Users/sergiomover/works/scratch/lzz_files/lzzfast.txt"];
-ToExpression[strings, InputForm]""".stripMargin.trim()
+//   def toSMT() : Unit = {
+//     val converter = DefaultSMTConverter
+//     val ml = new BaseKeYmaeraMathematicaBridge[KExpr](link, KeYmaeraToMathematica, MathematicaToKeYmaera) {}
+//     val command = s"""
+// strings = Import["/Users/sergiomover/works/scratch/lzz_files/lzzfast.txt"];
+// ToExpression[strings, InputForm]""".stripMargin.trim()
 
-// kyx`
+// // kyx`
+
+//     try {
+//       val (output, result) = ml.runUnchecked(command)
+//       println("Result of command: " + result.prettyString + " from raw output " + output)
+
+//       val formula = result match {
+//         case fml : Formula => fml
+//         case _ => {
+//           println(result.kind)
+//           throw ToolException("not a formula!")
+//         }
+//       }
+
+//       val smt  = converter(formula)
+//       val pw = new PrintWriter(new File("/tmp/lzzfast.smt2" ))
+//       pw.write(smt)
+//       pw.close
+
+//     } catch {
+//       case ex: ConversionException =>
+//         println("conversion exception", ex)
+//         ()
+//     }
+//   }
+  /**
+    * Converts an invariant generation problem to "SMT"
+    * 
+    * The output file is a json file containing SMT formulas.
+    */
+  def invarToSMT(name : String, seq : Sequent) : String = {
+    val converter = DefaultMySMTConverter
+
+    def getSingleInvProblem(link : MathematicaLink): Generator[InvarProblem] = (sequent,pos) => sequent.sub(pos) match {
+      // The semantics of sequent `ante |- succ` is the conjunction of the
+      // formulas in `ante` implying the disjunction of the formulas in `succ`.
+
+      case Some(Box(ode: ODESystem, post: Formula)) if post.isFOL => {
+        val odeRepr = MathematicaToSMT.getSMTForODE(converter, ode)
+        val (antVars, antSMT) : (List[String], String) = DefaultMySMTConverter.getSmt(
+          sequent.ante.reduce(And)
+        )
+        val (subVars, subSMT) : (List[String], String) = DefaultMySMTConverter.getSmt(post)
+
+        val predicates = getFactorList(link, converter, ode, sequent.ante, post).map( x => DefaultMySMTConverter.getSmt(x)._2)
+
+        val invarProblem = InvarProblem(name,
+          odeRepr.contVars,
+          odeRepr.varsDecl ++ antVars ++ subVars,
+          odeRepr.vectorField,
+          odeRepr.constraints,
+          antSMT,
+          subSMT,
+          predicates
+        )
+        List(invarProblem).toStream
+      }
+      case _ => {
+        throw new IllegalArgumentException("")
+      }
+    }
+
+    lazy val problemsCandidate: Generator[InvarProblem] = getSingleInvProblem(link)
+    val problems = problemsCandidate(seq, SuccPos(0)).toList
+
+    implicit val invarProblemFormat: JsonFormat[InvarProblem] = jsonFormat8(InvarProblem)
+    val jsonAst = problems.toJson
+    return jsonAst.prettyPrint
+  }
+
+  private def getFactorList(link : MathematicaLink, converter : MyConverter,
+    ode : ODESystem, assumptions: Seq[Formula], postCond: Formula) : List[Formula] = {
+    val converter = DefaultSMTConverter
+
+    val k2m = new UncheckedBaseK2MConverter()
+    val m2k = PegasusM2KConverter
+    val ml = new BaseKeYmaeraMathematicaBridge[KExpr](link, k2m, m2k) {}
+
+    val vars = DifferentialHelper.getPrimedVariables(ode)
+    val stringVars = "{" + vars.map(k2m(_)).mkString(", ") + "}"
+    val vectorField = "{" + DifferentialHelper.atomicOdes(ode).map(o => k2m(o.e)).mkString(", ") + "}"
+    val problem = "{ " +
+    k2m(assumptions.reduceOption(And).getOrElse(True)) + ", { " +
+    vectorField + ", " +
+    stringVars + ", " +
+    k2m(ode.constraint) + " }, " +
+    k2m(postCond) + " }"
+
+    val pegasusPath = File.separator + Configuration(Configuration.Keys.PEGASUS_PATH)
+    val joinedPath = "FileNameJoin[{$HomeDirectory," + scala.reflect.io.File(pegasusPath).segments.map(seg => "\"" + seg + "\"").mkString(",") + "}]"
+    val joinedPathPrimitives = s"""FileNameJoin[{$joinedPath, "Primitives"}]"""
+    val setPathsCmd =
+      s"""
+          |SetDirectory[$joinedPath];
+          |AppendTo[$$Path, $joinedPath];
+          |AppendTo[$$Path, $joinedPathPrimitives];""".stripMargin.trim
+
+    val command = s"""
+       |$setPathsCmd
+       |Needs["QualitativeAbstraction`","QualitativeAbstractionPolynomials.m"];
+       |QualitativeAbstraction`SFactorList[$problem]""".stripMargin.trim
 
     try {
+      // println(s"""\n$command\n""")
       val (output, result) = ml.runUnchecked(command)
-      println("Result of command: " + result.prettyString + " from raw output " + output)
-
-      val formula = result match {
-        case fml : Formula => fml
-        case _ => {
-          println(result.kind)
-          throw ToolException("not a formula!")
-        }
-      }
-
-      val smt  = converter(formula)
-      val pw = new PrintWriter(new File("/tmp/lzzfast.smt2" ))
-      pw.write(smt)
-      pw.close
-
+      // println("Result of command: " + result.prettyString + " from raw output " + output)
+      val listRes = parseRes(result)
+      listRes.map{ term => Equal(term, "0".asTerm)}
     } catch {
       case ex: ConversionException =>
         println("conversion exception", ex)
-        ()
+        List()
     }
+  }
+
+  def parseRes(listFml: Expression) : List[Term] = {
+    def parseResRec(listFml: Expression, acc : List[Term]) : List[Term] = {
+      listFml match {
+        case Pair(a,b) => {
+          parseResRec(a, parseResRec(b, acc))
+        }
+        case Nothing => acc
+        case x : Term => x :: acc
+      }
+    }
+    parseResRec(listFml, List()).reverse
   }
 }
 
@@ -192,49 +296,6 @@ object MathematicaToSMT {
     )
 
     val jsonAst = problemJson.toJson
-    return jsonAst.prettyPrint
-  }
-
-  /**
-    * Converts an invariant generation problem to "SMT"
-    * 
-    * The output file is a json file containing SMT formulas.
-    */
-  def invarToSMT(name : String, seq : Sequent) : String = {
-    val converter = DefaultMySMTConverter
-
-    def getSingleInvProblem(): Generator[InvarProblem] = (sequent,pos) => sequent.sub(pos) match {
-      // The semantics of sequent `ante |- succ` is the conjunction of the
-      // formulas in `ante` implying the disjunction of the formulas in `succ`.
-
-      case Some(Box(ode: ODESystem, post: Formula)) if post.isFOL => {
-        val odeRepr = MathematicaToSMT.getSMTForODE(converter, ode)
-        val (antVars, antSMT) : (List[String], String) = DefaultMySMTConverter.getSmt(
-          sequent.ante.reduce(And)
-        )
-        val (subVars, subSMT) : (List[String], String) = DefaultMySMTConverter.getSmt(post)
-
-        val invarProblem = InvarProblem(name,
-          odeRepr.contVars,
-          odeRepr.varsDecl ++ antVars ++ subVars,
-          odeRepr.vectorField,
-          odeRepr.constraints,
-          antSMT,
-          subSMT,
-          List()
-        )
-        List(invarProblem).toStream
-      }
-      case _ => {
-        throw new IllegalArgumentException("")
-      }
-    }
-
-    lazy val problemsCandidate: Generator[InvarProblem] = getSingleInvProblem()
-    val problems = problemsCandidate(seq, SuccPos(0)).toList
-
-    implicit val invarProblemFormat: JsonFormat[InvarProblem] = jsonFormat8(InvarProblem)
-    val jsonAst = problems.toJson
     return jsonAst.prettyPrint
   }
 }

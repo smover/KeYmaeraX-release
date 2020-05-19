@@ -27,7 +27,8 @@ class Mathematica(private[tools] val link: MathematicaLink, override val name: S
     with PDESolverTool with ToolOperationManagement {
 
   private val mQE = new MathematicaQETool(link)
-  private val mPegasus = new MathematicaInvGenTool(link)  
+  private val mPegasus = new MathematicaInvGenTool(link)
+  private val mSmt = new MathematicaToSMT(link, "Mathematica2SMT")
   private val mCEX = new MathematicaCEXTool(link)
   private val mODE = new MathematicaODESolverTool(link)
   private val mPDE = new MathematicaPDESolverTool(link)
@@ -73,7 +74,8 @@ class Mathematica(private[tools] val link: MathematicaLink, override val name: S
   /** Closes the connection to Mathematica */
   override def shutdown(): Unit = {
     mQE.shutdown()
-    mPegasus.shutdown()    
+    mPegasus.shutdown()
+    mSmt.shutdown()
     mCEX.shutdown()
     mODE.shutdown()
     mPDE.shutdown()
@@ -181,6 +183,7 @@ class Mathematica(private[tools] val link: MathematicaLink, override val name: S
   override def refuteODE(ode: ODESystem, assumptions: Seq[Formula], postCond: Formula): Option[Map[NamedSymbol, Expression]] = mPegasus.refuteODE(ode, assumptions, postCond)
   override def genODECond(ode: ODESystem, assumptions: Seq[Formula], postCond: Formula): (List[Formula],List[Formula]) = mPegasus.genODECond(ode, assumptions, postCond)
 
+  def invarToSMT(name : String, seq : Sequent) : String = mSmt.invarToSMT(name, seq)
 
   /** Restarts the MathKernel with the current configuration */
   override def restart(): Unit = link match {

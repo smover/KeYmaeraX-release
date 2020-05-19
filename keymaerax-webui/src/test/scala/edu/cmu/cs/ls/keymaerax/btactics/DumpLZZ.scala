@@ -87,9 +87,11 @@ class DumpLZZ extends TacticTestBase {
           case Imply(ante, succ@Box(_: ODESystem, _)) =>
             {
               val seq = Sequent(IndexedSeq(ante), IndexedSeq(succ))
+
+
               println(s"Generating invariants $name")
 
-              val jsonRepr = MathematicaToSMT.invarToSMT(name, seq)
+              val jsonRepr = tool.invarToSMT(name, seq)
               val fileName = name.replaceAll("[^a-zA-Z0-9\\.\\-]", "_");
               val filePath = "/tmp/" + fileName + ".invar"
 
