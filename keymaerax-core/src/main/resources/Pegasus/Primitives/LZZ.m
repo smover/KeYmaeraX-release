@@ -69,6 +69,7 @@ n=0;
 While[Not[PossibleZeroQ[rem]],
 n++;
 rem=Rank[p,n,f,vars];
+Echo[remo];
 ];
 n
 ]
