@@ -13,6 +13,7 @@ IvInfS::usage="IvInfS[S,f,vars] Same as InfS except for -f instead of f";
 InvS::usage="InvS[S,f,H] LZZ decision procedure determining continuous invariance of semi-algebaic set S 
 under the flow of a polynomial vector field f with evolution constraint H.";
 InvSFast::usage="InvSF[S,f,H] Same as InvS but does not run the full check. Sound but incomplete.";
+LZZEnc::usage="LZZEnc[S, f, vars, H] get the LZZ encoding";
 
 
 Begin["`Private`"];
@@ -117,6 +118,14 @@ Cond2 = Implies[S && H , InfS[S,f,vars]],
 Cond3 = Implies[Not[S] && H, Not[IvInfS[S,f,vars]]]
 },
 Resolve[ForAll[vars,Cond2 && Cond3], Reals]
+]
+
+
+LZZEnc[S_, f_List, vars_List, H_]:=LZZEnc[S, f, vars, H]=Module[{
+Cond2 = Implies[S && H && InfS[H,f,vars], InfS[S,f,vars]],
+Cond3 = Implies[Not[S] && H && IvInfS[H,f,vars], Not[IvInfS[S,f,vars]]]
+},
+ForAll[vars, Cond2 && Cond3]
 ]
 
 

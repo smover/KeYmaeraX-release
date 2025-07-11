@@ -1,6 +1,8 @@
 package edu.cmu.cs.ls.keymaerax.btactics
 
 import java.io.PrintWriter
+import java.io.BufferedInputStream
+import java.io.FileInputStream
 
 import edu.cmu.cs.ls.keymaerax.Configuration
 import edu.cmu.cs.ls.keymaerax.bellerophon.parser.BellePrettyPrinter
@@ -32,8 +34,14 @@ class DumpLZZ extends TacticTestBase {
 
   it should "print LZZ benchmarks as output" taggedAs SlowTest in withMathematica { tool =>
     withTemporaryConfig(Map(Configuration.Keys.PEGASUS_INVCHECK_TIMEOUT -> "-1")) {
+       // val entries = KeYmaeraXArchiveParser.parse(io.Source.fromInputStream(
+       //   getClass.getResourceAsStream("/keymaerax-projects/benchmarks/nonlinear.kyx")).mkString)
       val entries = KeYmaeraXArchiveParser.parse(io.Source.fromInputStream(
-        getClass.getResourceAsStream("/keymaerax-projects/benchmarks/nonlinear.kyx")).mkString)
+        new BufferedInputStream( new FileInputStream( "/Users/sergiomover/Desktop/app.kyx" ) )
+      ).mkString)
+
+      println(entries)
+
       val annotatedInvariants: ConfigurableGenerator[Formula] = TactixLibrary.invGenerator match {
         case gen: ConfigurableGenerator[Formula] => gen
       }
